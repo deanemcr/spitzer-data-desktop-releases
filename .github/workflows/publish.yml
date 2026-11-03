@@ -1,0 +1,43 @@
+name: Stage verified desktop installers
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Verified installer to stage
+        required: true
+        type: choice
+        options: [mac, windows]
+permissions:
+  contents: write
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch the verified build artifact
+        env:
+          MAC_URL: ${{ secrets.MAC_ARTIFACT_URL }}
+          WINDOWS_URL: ${{ secrets.WINDOWS_ARTIFACT_URL }}
+          PLATFORM: ${{ inputs.platform }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$PLATFORM" = mac ]; then url="$MAC_URL"; extension=dmg; else url="$WINDOWS_URL"; extension=exe; fi
+          test -n "$url"
+          curl --fail --silent --show-error --location --retry 2 --max-time 300 "$url" --output artifact.zip
+          mkdir installers
+          unzip -j artifact.zip "*.$extension" -d installers
+          cd installers
+          sha256sum * > "SHA256SUMS-$PLATFORM.txt"
+      - name: Upload to draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v1.0.0 >/dev/null 2>&1; then
+            test "$(gh release view v1.0.0 --json isDraft --jq .isDraft)" = true
+          else
+            gh release create v1.0.0 --draft --title 'Spitzer Data 1.0.0' --notes 'Full desktop workspace for Windows and Mac. Installation help: https://spitzerdata.com/desktop. Initial Windows release is unsigned; Mac release is ad-hoc signed and not notarized. First launch may require OS confirmation.'
+          fi
+          gh release upload v1.0.0 installers/* --clobber
