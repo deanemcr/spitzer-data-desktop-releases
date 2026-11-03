@@ -2,6 +2,11 @@ name: Stage verified desktop installers
 on:
   workflow_dispatch:
     inputs:
+      version:
+        description: Release version
+        required: true
+        default: "1.0.1"
+        type: string
       platform:
         description: Verified installer to stage
         required: true
@@ -32,12 +37,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view v1.0.0 >/dev/null 2>&1; then
-            test "$(gh release view v1.0.0 --json isDraft --jq .isDraft)" = true
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            test "$(gh release view "v$VERSION" --json isDraft --jq .isDraft)" = true
           else
-            gh release create v1.0.0 --draft --title 'Spitzer Data 1.0.0' --notes 'Full desktop workspace for Windows and Mac. Installation help: https://spitzerdata.com/desktop. Initial Windows release is unsigned; Mac release is ad-hoc signed and not notarized. First launch may require OS confirmation.'
+            gh release create "v$VERSION" --draft --title "Spitzer Data $VERSION" --notes 'Mac runtime signing correction. This build remains ad-hoc signed and is not Apple-notarized. Installation help: https://spitzerdata.com/desktop.'
           fi
-          gh release upload v1.0.0 installers/* --clobber
+          gh release upload "v$VERSION" installers/* --clobber
